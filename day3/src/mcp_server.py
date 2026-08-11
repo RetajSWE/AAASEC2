@@ -1,12 +1,17 @@
 from pathlib import Path
-
+from pathlib import Path
+from fastmcp.server.providers.skills import SkillsDirectoryProvider
 from fastmcp import FastMCP
 from fastmcp.server.providers.skills import SkillsDirectoryProvider
 
 
 mcp = FastMCP("RetajSWE Tools")
 
-
+mcp.add_provider(
+    SkillsDirectoryProvider(
+        roots=Path(__file__).parent.parent / "skills"
+    )
+)
 @mcp.tool
 def calculate(expression: str) -> float:
     """Calculate a basic arithmetic expression."""
