@@ -1,27 +1,115 @@
 """
 DAY 3 — HTTP API.
 
-READ FIRST:  ../03-fastapi-openresponses.md
-             ../09-a2a.md   (for the agent card endpoint)
-
-Do not continue to 04-docker.md until:
-    curl http://localhost:8000/healthz            -> {"status":"ok"}
-    curl -X POST http://localhost:8000/v1/responses \
-         -H 'Content-Type: application/json' -d '{"input":"hi"}'
-returns an OpenResponses-shaped JSON object.
-
-TODO:
-  1. app = FastAPI(...); agent = build_agent()   <- built ONCE, at startup
-  2. GET  /healthz
-  3. POST /v1/responses  — accept {"input": "...", "model": optional},
-     invoke the agent, return:
-       {id, object:"response", created_at, status:"completed", model,
-        output:[{type:"message", role:"assistant",
-                 content:[{type:"output_text", text: ...}]}]}
-     (a deliberate SUBSET of OpenResponses — the shape, not the whole spec)
-  4. GET /.well-known/agent-card.json — your A2A Agent Card. Use
-     STUDENT_NAME and PUBLIC_URL from the environment; the card's "url"
-     field must point at YOUR /v1/responses.
+FastAPI service exposing the Day 3 agent through an OpenResponses-shaped endpoint.
 """
 
-# TODO
+import os
+import time
+import uuid
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from src.agent import build_agent
+
+
+load_dotenv()
+
+
+# ---------------------------------------------------------
+# App + Agent
+# ---------------------------------------------------------
+
+app = FastAPI(
+    title="Day 3 Agent API",
+    description="FastAPI service exposing the Day 3 deep agent.",
+    version="1.0.0",
+)
+
+# Build the agent ONCE when the API starts.
+agent = build_agent()
+
+
+# ---------------------------------------------------------
+# Request model
+# ---------------------------------------------------------
+
+class ResponseRequest(BaseModel):
+    input: str
+    model: str | None = None
+
+
+# ---------------------------------------------------------
+# Health check
+# ---------------------------------------------------------
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------
+# OpenResponses subset
+# ---------------------------------------------------------
+
+@app.post("/v1/responses")
+async def create_response(request: ResponseRequest):
+    result = await agent.ainvoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": request.input,
+                }
+            ]
+        }
+    )
+
+    message = result["messages"][-1]
+
+    if isinstance(message, dict):
+        text = message.get("content", "")
+    else:
+        text = message.content
+
+    # Some LangChain messages may contain structured content.
+    if not isinstance(text, str):
+        text = str(text)
+
+    model_name = request.model or "day3-agent"
+
+    return {
+        "id": f"resp_{uuid.uuid4().hex}",
+        "object": "response",
+        "created_at": int(time.time()),
+        "status": "completed",
+        "model": model_name,
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": text,
+                    }
+                ],
+            }
+        ],
+    }
+
+
+# ---------------------------------------------------------
+# A2A Agent Card — stub for now
+# ---------------------------------------------------------
+
+@app.get("/.well-known/agent-card.json")
+async def agent_card():
+    return {
+        "todo": True,
+        "name": os.getenv("STUDENT_NAME", "student"),
+        "url": f"{os.getenv('PUBLIC_URL', 'http://localhost:8000')}/v1/responses",
+    }
+
