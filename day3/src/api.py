@@ -107,9 +107,27 @@ async def create_response(request: ResponseRequest):
 
 @app.get("/.well-known/agent-card.json")
 async def agent_card():
+    student_name = os.getenv("STUDENT_NAME", "student")
+    public_url = os.getenv("PUBLIC_URL", "http://localhost:8000")
+
     return {
-        "todo": True,
-        "name": os.getenv("STUDENT_NAME", "student"),
-        "url": f"{os.getenv('PUBLIC_URL', 'http://localhost:8000')}/v1/responses",
+        "protocolVersion": "1.0",
+        "name": f"{student_name}-agent",
+        "description": "An AI agent that researches topics and produces structured research briefs.",
+        "url": f"{public_url}/v1/responses",
+        "version": "0.1.0",
+        "capabilities": {
+            "streaming": False
+        },
+        "defaultInputModes": ["text/plain"],
+        "defaultOutputModes": ["text/plain"],
+        "skills": [
+            {
+                "id": "research-brief",
+                "name": "Research Brief",
+                "description": "Researches a topic and produces a concise research brief.",
+                "tags": ["research", "brief", "analysis"]
+            }
+        ]
     }
 
